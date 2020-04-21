@@ -44,7 +44,8 @@ void  my_mm6_sse2_mpi(int localN, int localK, int N, int M, int K, double *a, do
     for (i=0; i < localK; i++){
       for (j=0; j < localN; j++){
         for (k=0; k < M; k++){
-          *(c+ g*localK*localN + i*localN + j) = *(c+ g*localK*localN + i*localN + j) + *(a+k*localN + j) *  *(b + i*M + k);
+          *(c+ g*localK*localN + i*localN + j) = *(c+ g*localK*localN + i*localN + j) + *(a+j*M + k)*  *(b + k*localK + i);
+  
           //think we might be fliping them
         }
       }
