@@ -32,19 +32,48 @@ void  my_mm6_sse2_mpi(int localN, int localK, int N, int M, int K, double *a, do
   //base size to deal with on on Prosses Rank * blockSize (size of matix / num of prossess)
 
   int i, j, k, g;
-  printf("fuck shit");
 
-  for (i=0; i < K; i++){
-    for (k=0; k < M; k++){
-      for (j=0; j < localK; j++){
-        for (g=0; g < localN; g++){
-	        //*(c+i*K + g) = *(c+g*K + g) + *(a+k*localN + g) *  *(b + k*localK + j);
-          *(c+i*K + g) = *(c+g*K + g) + *(a+k*localN + g) *  *(b + j*M + k);
-          
+  int world_size;
+  MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+  int pRank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &pRank);
+
+
+  for (g=0; g < world_size; g++){
+    for (i=0; i < localK; i++){
+      for (j=0; j < localN; j++){
+        for (k=0; k < M; k++){
+          *(c+ g*localK*localN + i*localN + j) = *(c+ g*localK*localN + i*localN + j) + *(a+k*localN + j) *  *(b + i*M + k);
+          //think we might be fliping them
         }
       }
     }
+    MPI_Barrier(MPI_COMM_WORLD);
+    //int MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI_Comm comm)
+    //MPI_Send(,1, B)
+    //int MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag,MPI_Comm comm, MPI_Status * status)
+    //MPI_Recv(,1, B)
+
+    //receive from rank below and send to rank above
+    //use if statment to check if curr rank = last rank then send to first rank
+    //use if statment to check if curr rank - first rank then resive from last rank
+
+    if (pRank == 0) { // first
+      printf("prank 0 running\n");
+      MPI_Send(b, 1, MPI_DOUBLE, 1, 0, MPI_COMM_WORLD);
+      MPI_Recv(b, 1, MPI_DOUBLE, world_size - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    } else if (pRank == world_size - 1) { // last
+      printf("prank world_size - 1 running\n");
+      MPI_Send(b,1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
+      MPI_Recv(b,1, MPI_DOUBLE, pRank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    } else { // in between
+      printf("prank in between running\n");
+      MPI_Send(b,1, MPI_DOUBLE, pRank + 1, 0, MPI_COMM_WORLD);
+      MPI_Recv(b,1, MPI_DOUBLE, pRank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    }
   }
+
 
   // this is the routine that you must implement
 }
@@ -106,14 +135,14 @@ int main( int argc, char *argv[])
   srand48(100+myid);
 
   for (i=0; i<localN*M; ++i) {
-    A[i] = drand48();
-    //      A[i] = 1.0;
+    //      A[i] = drand48();
+    A[i] = 1.0;
     C[i] = 0.0;
   }
   for (i=0; i<M*localK; ++i) {
-    B[i] = drand48();
+    //      B[i] = drand48();
     //      B[i] = myid*1.0;
-    //      B[i] = 1.0;
+    B[i] = 1.0;
   }
 
   MPI_Barrier(MPI_COMM_WORLD);
