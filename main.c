@@ -1,3 +1,22 @@
+/*
+Names: Michael Foley and Chris Dunphy
+Test machine specs: i7-6700k personal computer (8 registers), 16 gb 2666hz RAM (runing on 64-bit gcc/OpenMP environment)
+Testing date: 2/20/20
+About: Multiplies randomly generated matrices in an optimized way with OpenMP
+Comments: Block tiling was not able to be implemented
+Compile: $ gcc P2P2_OpenMP.c -O3 -DCHECK -funroll-all-loops -fopenmp -o P2P2_OpenMP
+         $ ./P2P2_OpenMP
+
+Performance report: 
+                    pThreaded: 1687 ms (2048x2048 matrix), 15152 ms (4096x4096 matrix)
+                    OpenMP: 1459 ms (2048x2048 matrix), 14846 ms (4096x4096 matrix)
+                    FLOP total: 8,394,752 (2048x2048 matrix), 33,566,714 (4096x4096 matrix) (N * 3 + N * N * 2)
+                    FLOPS: 6995626.6666 FLOPS (2048x2048 matrix), 3390577.1717 FLOPS (4096x4096 matrix)
+                    MFLOPS: 6.99 MFLOPS (2048x2048 matrix), 3.39 MFLOPS (4096x4096 matrix)
+
+I have abided by the wheaton college honor code, Michael Foley/Chris Dunphy
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,62 +40,44 @@ struct timeval t1, t2;
 
 void  my_mm6_sse2_mpi(int localN, int localK, int N, int M, int K, double *a, double *b, double *c)
 {
-  //A = localN*M
-  //B = M*localK
-  //C =localN*K
-
-  //A goes from 0 - M in that go from 0 to local N
-  //B goes from 0 - M in that go from 0 to local K
-  //C goes from 0 - K int that go from 0 to locak N
-
-  //base size to deal with on on Prosses Rank * blockSize (size of matix / num of prossess)
-
-  int i, j, k, g;
-
-  int world_size;
+  int i, j, k, g, world_size, pRank, changeB;
   MPI_Comm_size(MPI_COMM_WORLD, &world_size);
-
-  int pRank;
   MPI_Comm_rank(MPI_COMM_WORLD, &pRank);
-
-
+  changeB = pRank;
   for (g=0; g < world_size; g++){
     for (i=0; i < localK; i++){
       for (j=0; j < localN; j++){
         for (k=0; k < M; k++){
-          *(c+ g*localK*localN + i*localN + j) = *(c+ g*localK*localN + i*localN + j) + *(a+j*M + k)*  *(b + k*localK + i);
-  
-          //think we might be fliping them
+          *(c+ changeB*localK*localN + i*localN + j) = *(c+ changeB*localK*localN + i*localN + j) + *(a+j*M + k)*  *(b + k*localK + i);
         }
       }
     }
-    MPI_Barrier(MPI_COMM_WORLD);
-    //int MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI_Comm comm)
-    //MPI_Send(,1, B)
-    //int MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag,MPI_Comm comm, MPI_Status * status)
-    //MPI_Recv(,1, B)
-
-    //receive from rank below and send to rank above
-    //use if statment to check if curr rank = last rank then send to first rank
-    //use if statment to check if curr rank - first rank then resive from last rank
-
     if (pRank == 0) { // first
-      printf("prank 0 running\n");
-      MPI_Send(b, 1, MPI_DOUBLE, 1, 0, MPI_COMM_WORLD);
-      MPI_Recv(b, 1, MPI_DOUBLE, world_size - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    } else if (pRank == world_size - 1) { // last
-      printf("prank world_size - 1 running\n");
-      MPI_Send(b,1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
-      MPI_Recv(b,1, MPI_DOUBLE, pRank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    } else { // in between
-      printf("prank in between running\n");
-      MPI_Send(b,1, MPI_DOUBLE, pRank + 1, 0, MPI_COMM_WORLD);
-      MPI_Recv(b,1, MPI_DOUBLE, pRank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    }
+        MPI_Recv(b, 1, MPI_DOUBLE, world_size - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Send(b, 1, MPI_DOUBLE, 1, 0, MPI_COMM_WORLD);
+        if (changeB == 0){
+          changeB = world_size-1;
+        } else {
+          changeB--;
+        }
+      } else if (pRank == world_size - 1) { // last
+        MPI_Send(b,1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
+        MPI_Recv(b,1, MPI_DOUBLE, pRank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        if (changeB == 0){
+          changeB = world_size-1;
+        } else {
+          changeB--;
+        }
+      } else { // in between
+        MPI_Send(b,1, MPI_DOUBLE, pRank + 1, 0, MPI_COMM_WORLD);
+        MPI_Recv(b,1, MPI_DOUBLE, pRank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        if (changeB == 0){
+          changeB = world_size-1;
+        } else {
+          changeB--;
+        }
+      }
   }
-
-
-  // this is the routine that you must implement
 }
 
 int main( int argc, char *argv[])
